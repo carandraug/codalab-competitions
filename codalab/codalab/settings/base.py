@@ -397,6 +397,8 @@ class Base(Configuration):
     # Defaults to virtual because AWS recently deprecated 'path' style addressing. Boto3 required for virtual to have an effect.
     AWS_S3_ADDRESSING_STYLE = os.environ.get('AWS_S3_ADDRESSING_STYLE', 'virtual')
 
+    AWS_S3_USE_SSL = _bool_from_env('AWS_S3_USE_SSL', True)
+
     # TODO: We will need to explicitly set this eventually. When set to None publicly uploaded files like images are not viewable. (Access Denied from AWS)
     # AWS_DEFAULT_ACL = None
 

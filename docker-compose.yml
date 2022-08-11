@@ -1,16 +1,27 @@
 version: '2'
 services:
+  minio:
+    image: quay.io/minio/minio
+    restart: always
+    env_file: .env
+    ports: ["9002:9002"]
+    command: server --address ":9002" /data
+    volumes:
+      - /data/minio:/data
+    container_name: minio
+
   # --------------------------------------------------------------------------
   # HTTP Server
   # --------------------------------------------------------------------------
   nginx:
     image: nginx
+    restart: always
     ports:
       - ${NGINX_PORT}:${NGINX_PORT}
-      - ${SSL_PORT}:${SSL_PORT}
+#      - ${SSL_PORT}:${SSL_PORT}
     command: bash -x /app/docker/run_nginx.sh
     volumes:
-      - ./certs:/app/certs
+#      - ./certs:/app/certs
       - ./docker:/app/docker
       - ./codalab:/app/codalab
       - ${LOGGING_DIR}/nginx:/var/log/nginx/
@@ -28,6 +39,7 @@ services:
   # --------------------------------------------------------------------------
   postgres:
     image: postgres:9.6.3
+    restart: always
     environment:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
@@ -43,6 +55,26 @@ services:
         max-size: "200k"
     container_name: postgres
 
+  pgbackups:
+    image: prodrigestivill/postgres-backup-local
+    restart: always
+    volumes:
+      - ./docker/postgres:/backups
+    links:
+      - postgres
+    depends_on:
+      - postgres
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - HEALTHCHECK_PORT=8087
+
 
   # --------------------------------------------------------------------------
   # Message queue
@@ -53,6 +85,7 @@ services:
       # of envsubst dependency
       context: .
       dockerfile: docker/rabbitmq/Dockerfile
+    restart: always
     hostname: rabbit
     command: bash -x /app/docker/run_rabbitmq.sh
     environment:
@@ -76,6 +109,7 @@ services:
     build:
       context: .
       dockerfile: docker/flower/Dockerfile
+    restart: always
     hostname: flower
     ports:
       - ${FLOWER_PORT}:${FLOWER_PORT}
@@ -87,6 +121,7 @@ services:
       - AMQP_PORT=${RABBITMQ_PORT}
       - FLOWER_CERTFILE=${SSL_CERTIFICATE}
       - FLOWER_KEYFILE=${SSL_CERTIFICATE_KEY}
+      - BROKER_USE_SSL=
     volumes:
       - ./certs:/app/certs
     env_file: .env
@@ -103,6 +138,7 @@ services:
   # --------------------------------------------------------------------------
   memcached:
     image: memcached
+    restart: always
     hostname: memcached
     command: "/usr/local/bin/memcached -u memcache"
     logging:
@@ -118,6 +154,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: always
     hostname: django
     ports:
       - ${DJANGO_PORT}:${DJANGO_PORT}
@@ -149,6 +186,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: always
     command: sh /app/docker/run_site.sh
     volumes:
       - ./codalab:/app/codalab
@@ -169,12 +207,15 @@ services:
       
   worker_compute:
     image: codalab/competitions-v1-compute-worker:1.1.7
+    restart: always
     privileged: true
     volumes:
       - ${LOGGING_DIR}/worker_compute:/var/log/
       - ${SUBMISSION_TEMP_DIR}:${SUBMISSION_TEMP_DIR}
       - /var/run/docker.sock:/var/run/docker.sock
     env_file: .env
+    environment:
+      - BROKER_USE_SSL=
     links:
       - rabbit
     logging:

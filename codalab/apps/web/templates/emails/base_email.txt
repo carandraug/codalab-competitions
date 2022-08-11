@@ -4,9 +4,7 @@ Hello {{ user.username }},
 {% block content %}{% endblock %}
 
 {% if not mass_email %}
-Thanks,
-
-CodaLab Team
+Thank you
 {% endif %}
 
 
